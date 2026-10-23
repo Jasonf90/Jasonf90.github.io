@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["MKC824FRVY.com.holdlivetimers.app"],
+        "components": [
+          {
+            "/": "/c/*",
+            "comment": "A countdown shared from HOLD (1.5.0). The countdown itself is in the fragment."
+          }
+        ]
+      }
+    ]
+  }
+}

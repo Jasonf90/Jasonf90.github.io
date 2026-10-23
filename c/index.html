@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A countdown from HOLD</title>
+<meta name="description" content="A countdown someone shared from HOLD.">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<!-- Smart App Banner. The script below adds this page's link as the app-argument, so OPEN on the
+     banner hands HOLD the same countdown a universal link would. -->
+<meta name="apple-itunes-app" content="app-id=6811352312" id="smart-banner">
+<!--
+  HOLD 1.5.0: the page a shared countdown link opens for someone without HOLD.
+
+  Everything it shows comes from the part of the link after "#", which the browser never sends to
+  a server. Nothing on this page loads from anywhere else: no fonts, no images, no scripts, no
+  analytics. With HOLD installed, iOS opens the app instead (apple-app-site-association, /c/*).
+
+  The reader below must agree with parseSharedCountdown in src/domain/events.ts of the HOLD repo,
+  where src/domain/__tests__/sharedCountdownPage.test.ts runs it against the same links.
+-->
+<style>
+  :root{--chassis:#12110F;--well:#0B0C0A;--bezel:#1A1815;--unlit:#1E201B;--primary:#F4F3F0;
+    --secondary:#C4BEB2;--dim:#908A7F;--ink:#EC4899;color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--chassis);color:var(--primary);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+    min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px 16px}
+  main{width:100%;max-width:26rem;text-align:center}
+  .brand{font-weight:700;letter-spacing:.3em;color:var(--secondary);font-size:13px;margin:0 0 20px}
+  .well{background:var(--well);border:2px solid var(--bezel);border-radius:10px;padding:28px 18px 24px}
+  .name{font-weight:700;letter-spacing:.12em;font-size:15px;margin:0 0 14px;color:var(--ink);
+    overflow-wrap:anywhere}
+  .days{font:700 clamp(64px,24vw,112px)/1 ui-monospace,"SF Mono",Menlo,Courier,monospace;
+    color:var(--ink);margin:0;letter-spacing:.02em}
+  .unit{font-weight:700;letter-spacing:.2em;font-size:13px;color:var(--secondary);margin:8px 0 0}
+  .when{color:var(--dim);font-size:13px;letter-spacing:.06em;margin:16px 0 0}
+  .problem{color:var(--secondary);margin:0;font-size:15px}
+  .cta{display:block;margin:24px 0 0;padding:15px 18px;border-radius:10px;background:var(--primary);
+    color:var(--chassis);font-weight:700;letter-spacing:.08em;text-decoration:none;font-size:15px}
+  .note{color:var(--dim);font-size:13px;margin:14px 0 0}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">HOLD</p>
+  <div class="well">
+    <div id="countdown" hidden>
+      <p class="name" id="name"></p>
+      <p class="days" id="days"></p>
+      <p class="unit" id="unit"></p>
+      <p class="when" id="when"></p>
+    </div>
+    <p class="problem" id="problem" hidden></p>
+    <noscript><p class="problem">Turn on JavaScript to see this countdown, or open the link on an iPhone with HOLD.</p></noscript>
+  </div>
+  <a class="cta" href="https://apps.apple.com/app/id6811352312">COUNT DOWN WITH HOLD</a>
+  <p class="note">On an iPhone with HOLD, this link opens the countdown in the app, ready to add.</p>
+  <p class="note">This page reads the countdown from the link itself. Nothing is sent anywhere.</p>
+</main>
+
+<script id="hold-reader">
+// The link format, read exactly as HOLD reads it. Pure: no page, no clock but the one passed in.
+// Returns { ok: true, name, target, repeatsYearly } or { ok: false, problem: 'damaged' | 'newer' | 'passed' }.
+function readSharedCountdown(href, now) {
+  var NAME_MAX = 32, HORIZON_YEARS = 10, LOOKBACK_YEARS = 120, MAX_URL = 512, VERSION = '1';
+  var damaged = { ok: false, problem: 'damaged' };
+  if (typeof href !== 'string' || href.length > MAX_URL) return damaged;
+  var m = /^https:\/\/jasonf90\.github\.io\/c\/(?:index\.html)?#(.*)$/i.exec(href);
+  if (!m || m[1].length === 0) return damaged;
+  var fields = {}, allowed = { v: 1, n: 1, d: 1, y: 1 }, pairs = m[1].split('&');
+  for (var i = 0; i < pairs.length; i++) {
+    var eq = pairs[i].indexOf('=');
+    if (eq <= 0) return damaged;
+    var key = pairs[i].slice(0, eq);
+    if (!Object.prototype.hasOwnProperty.call(allowed, key) ||
+        Object.prototype.hasOwnProperty.call(fields, key)) return damaged;
+    try { fields[key] = decodeURIComponent(pairs[i].slice(eq + 1)); } catch (e) { return damaged; }
+  }
+  if (fields.v !== VERSION) {
+    return /^[1-9]\d{0,3}$/.test(fields.v || '') && Number(fields.v) > Number(VERSION)
+      ? { ok: false, problem: 'newer' } : damaged;
+  }
+  var raw = fields.n;
+  if (typeof raw !== 'string' || /[\u0000-\u001F\u007F]/.test(raw)) return damaged;
+  var name = raw.trim().replace(/\s+/g, ' ').toUpperCase();
+  if (name.length === 0 || name.length > NAME_MAX) return damaged;
+  if (fields.y !== undefined && fields.y !== '1') return damaged;
+  var repeatsYearly = fields.y === '1';
+  var d = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(fields.d || '');
+  if (!d) return damaged;
+  var year = +d[1], month = +d[2], day = +d[3], hour = +d[4], minute = +d[5];
+  if (month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59) return damaged;
+  var target = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (target.getFullYear() !== year || target.getMonth() !== month - 1 || target.getDate() !== day) return damaged;
+  var horizon = new Date(now.getTime());
+  horizon.setUTCFullYear(horizon.getUTCFullYear() + HORIZON_YEARS);
+  if (repeatsYearly) {
+    if (target.getFullYear() < now.getFullYear() - LOOKBACK_YEARS) return damaged;
+  } else if (target.getTime() <= now.getTime()) {
+    return { ok: false, problem: 'passed' };
+  }
+  if (target.getTime() > horizon.getTime()) return damaged;
+  return { ok: true, name: name, target: target, repeatsYearly: repeatsYearly };
+}
+
+// The date a repeating countdown is on now: this year's, or next year's once today is past it.
+// 29 February falls on the 28th in a year without one, as in HOLD.
+function nextOccurrence(target, now) {
+  var dayIndex = function (t) { return Date.UTC(t.getFullYear(), t.getMonth(), t.getDate()) / 86400000; };
+  var inYear = function (y) {
+    var leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    var dd = target.getMonth() === 1 && target.getDate() === 29 && !leap ? 28 : target.getDate();
+    var o = new Date(target.getTime());
+    o.setFullYear(y, target.getMonth(), dd);
+    return o;
+  };
+  var year = Math.max(target.getFullYear(), now.getFullYear());
+  var occurrence = inYear(year);
+  if (dayIndex(occurrence) < dayIndex(now)) occurrence = inYear(year + 1);
+  return occurrence;
+}
+
+// Local calendar days from now to then: 0 today, 1 tomorrow, as HOLD counts them.
+function calendarDays(now, then) {
+  return Math.round(
+    (Date.UTC(then.getFullYear(), then.getMonth(), then.getDate()) -
+      Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000
+  );
+}
+</script>
+
+<script>
+(function () {
+  var banner = document.getElementById('smart-banner');
+  if (banner) banner.setAttribute('content', 'app-id=6811352312, app-argument=' + location.href);
+
+  var now = new Date();
+  var reading = readSharedCountdown(location.href, now);
+  if (!reading.ok) {
+    var problems = {
+      damaged: 'This countdown link is incomplete. Ask for it again.',
+      newer: 'This countdown link is from a newer HOLD. Open it on an iPhone with the latest HOLD.',
+      passed: 'That countdown has already passed.'
+    };
+    var p = document.getElementById('problem');
+    p.textContent = problems[reading.problem];
+    p.hidden = false;
+    return;
+  }
+
+  var target = reading.repeatsYearly ? nextOccurrence(reading.target, now) : reading.target;
+  var days = calendarDays(now, target);
+  document.getElementById('name').textContent = reading.name;
+  document.getElementById('days').textContent = days > 1 ? String(days) : days === 1 ? 'TOMORROW' : 'TODAY';
+  document.getElementById('unit').textContent = days > 1 ? 'DAYS TO GO' : '';
+  if (days <= 1) document.getElementById('days').style.fontSize = 'clamp(44px,14vw,72px)';
+  var dateOptions = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+  var when = target.toLocaleDateString(undefined, dateOptions);
+  if (target.getHours() !== 0 || target.getMinutes() !== 0) {
+    when += ' · ' + target.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+  if (reading.repeatsYearly) when += ' · EVERY YEAR';
+  document.getElementById('when').textContent = when.toUpperCase();
+  document.title = reading.name + ' · HOLD';
+  document.getElementById('countdown').hidden = false;
+})();
+</script>
+</body>
+</html>
